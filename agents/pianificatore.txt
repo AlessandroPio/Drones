@@ -1,0 +1,59 @@
+:- dynamic stato_missione/2.
+
+:- write('Disponibile per cercare droni!'), nl.
+
+salva_stato :-
+    tell('pianificatore.txt'),
+    write(':- dynamic stato_missione/2.'), nl,
+    listing(stato_missione),
+    told, nl,
+    write('I fatti sono stati salvati correttamente dal file').
+
+nuova_missioneE(MissioneID, X, Y) :>
+       verifica_missione(MissioneID)
+    ->  format('Missione con ID: ~w esistente! Impossibile avviare una nuova missione con lo stesso ID.~n', [MissioneID])
+    ;   sleep(2),
+           coordinate_valide(X, Y)
+        ->  format('Ricevuto, avvio nuova missione con ID: ~w alle coordinate (~w, ~w).~n', [MissioneID, X, Y]),
+            assert(stato_missione(MissioneID, in_corso)),
+            salva_stato,
+            messageA(monitoraggio, send_message(trova_drone(MissioneID, X, Y), Me))
+        ;   format('Missione non valida! ID: ~w alle coordinate (~w, ~w).~n', [MissioneID, X, Y]),
+    retractall(stato_missione(MissioneID, _)),
+    assert(stato_missione(MissioneID, fallita)),
+    salva_stato.
+
+
+coordinate_valide(X, Y) :-
+    0 is mod(X, 10),
+    0 is mod(Y, 10).
+
+nessun_drone_disponibileE(MissioneID, X, Y) :-
+    sleep(2),
+    format('Missione con ID: ~w alle coordinate (~w, ~w) fallita: nessun drone disponibile.~n', [MissioneID, X, Y]),
+    retractall(stato_missione(MissioneID, _)),
+    salva_stato,
+    assert(stato_missione(MissioneID, fallita)).
+
+missione_completataE(MissioneID) :-
+    sleep(2),
+    format('Conferma della missione completata con ID: ~w.~n', [MissioneID]),
+    retractall(stato_missione(MissioneID, _)),
+    salva_stato,
+    assert(stato_missione(MissioneID, completata)).
+
+stampa_stato_missioniE :-
+    findall((MissioneID, Stato), stato_missione(MissioneID, Stato), Missioni),
+    (   Missioni == []
+    ->  write('Non ci sono missioni registrate.'), nl
+    ;   write('Stato delle missioni:'), nl,
+        stampa_lista_coppie(Missioni)
+    ).
+
+stampa_lista_coppie([]).
+stampa_lista_coppie([(MissioneID, Stato)|Coda]) :-
+    format('MissioneID: ~w, Stato: ~w~n', [MissioneID, Stato]),
+    stampa_lista_coppie(Coda).
+
+verifica_missione(MissioneID) :-
+    stato_missione(MissioneID, _).

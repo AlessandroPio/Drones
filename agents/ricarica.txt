@@ -1,0 +1,6 @@
+:- write('Disponibile per gestire la ricarica dei droni!'), nl.
+
+richiedi_ricarica_batteriaE(MissioneID, Drone, X, Y) :>
+    sleep(2),
+    format('Fornisco ricarica al drone ~w.~n', [Drone]),
+    messageA(Drone, send_message(ricarica_drone(MissioneID, Drone, X, Y), Me)).

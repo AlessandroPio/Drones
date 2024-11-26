@@ -1,20 +1,22 @@
-import os
+from os import environ
 
 class Config:
     def __init__(self):
         print("Setting environment variables...")
-        os.environ['IMG_PATH'] = './images/'
-        os.environ['OLLAMA_IMG_MODEL'] = "moondream"
-        os.environ['OLLAMA_CHAT_MODEL'] = "llama2"
+        environ['IMG_PATH'] = './images/'
+        environ['OLLAMA_IMG_MODEL'] = "moondream"
+        environ['OLLAMA_CHAT_MODEL'] = "llama2"
+        environ['DATABASE_FILES'] = ('["./DALI/Examples/basic/drone1.txt",'
+                                        '"./DALI/Examples/basic/pianificatore.txt",'
+                                        '"./DALI/Examples/basic/drone2.txt"]')
         print()
-        print(os.environ['IMG_PATH'])
-        print(os.environ['OLLAMA_IMG_MODEL'])
+        print(environ['IMG_PATH'])
+        print(environ['OLLAMA_IMG_MODEL'])
+        print(environ['DATABASE_FILES'])
         print()
         print("Environment variables setted")
 
-
 class Log:
-    # COLORS
     HEADER = '\033[95m'
     OKGREEN = '\033[92m'
     WARNING = '\033[93m'

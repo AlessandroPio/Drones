@@ -1,0 +1,179 @@
+:- dynamic stato_drone/2.
+:- dynamic batteria_drone/2.
+:- dynamic coordinate_drone/3.
+:- dynamic step/1.
+:- dynamic weather_conditions/1.
+:- use_module(library(process)).
+
+stato_drone(drone1, disponibile).
+batteria_drone(drone1, 40).
+coordinate_drone(drone1, 0, 0).
+
+
+carica_richiesta :-
+    consult('richiesta_img_1.txt'), nl,
+    write('Analisi immagine acquisita'), nl,
+    weather_conditions(Meteo),
+    format('Le condizioni meteo attuali sono: ~w.~n', [Meteo]), nl.
+
+salva_stato :-
+    tell('drone1.txt'),
+    write(':- dynamic stato_drone/2.'), nl,
+    write(':- dynamic batteria_drone/2.'), nl,
+    write(':- dynamic coordinate_drone/3.'), nl,
+    write(':- dynamic step/1.'), nl,
+    listing(stato_drone),
+    listing(batteria_drone),
+    listing(coordinate_drone),
+    told, nl,
+    write('I fatti sono stati salvati correttamente dal file'), nl.
+
+chiamata_processo :-
+    process_create('/opt/anaconda3/envs/Drones/bin/python', ['/Users/alessandro/Desktop/Drones/Drones/WeatherHandler.py', 'vai', '1'], [process(PID)]),
+    process_wait(PID, Status),
+    write('Processo analisi terminato'),
+    carica_richiesta.
+
+stato_batteria :-
+    stato_drone(drone1,disponibile),
+    batteria_drone(drone1, Batteria),
+    Batteria < 50.
+
+stato_batteriaI :>
+    batteria_drone(drone1, Batteria),
+    format('La batteria del drone1 si trova al di sotto il 50%. Batteria attuale: ~w%.~n', [Batteria]),
+    NuovaBatteria is min(100, Batteria + 50),
+    retract(batteria_drone(drone1, Batteria)),
+    assert(batteria_drone(drone1, NuovaBatteria)),
+    salva_stato,
+    sleep(2),
+    format('Ricarica completata! Nuova batteria: ~w%.~n', [NuovaBatteria]).
+
+cambia_statoA :>
+    retract(stato_drone(drone1, disponibile)),
+    assert(stato_drone(drone1, occupato)),
+    salva_stato,
+    sleep(2),
+    write('Il drone drone1 ora è occupato per la missione.'), nl.
+
+ricarica_droneE(MissioneID, Drone, X, Y) :-
+    sleep(2),
+    format('Avvio la ricarica per il drone ~w.~n', [Drone]),
+    batteria_drone(Drone, Batteria),
+    NuovaBatteria is min(100, Batteria + 50),
+    retract(batteria_drone(Drone, Batteria)),
+    assert(batteria_drone(Drone, NuovaBatteria)),
+    salva_stato,
+    sleep(2),
+    format('La batteria del drone ~w è stata ricaricata a ~w%.~n', [Drone, NuovaBatteria]),
+    consegnaA(MissioneID, Drone, X, Y).
+
+prepara_missione(MissioneID, X, Y) :-
+    write('Preparazione per la missione.'), nl,
+    cambia_statoA,
+    salva_stato,
+    format('Drone pronto per la missione ID: ~w alle coordinate (~w, ~w).~n', [MissioneID, X, Y]),
+    assegnazione_missioneE(MissioneID, drone1, X, Y).
+
+assegnazione_missioneE(MissioneID, Drone, X, Y) :>
+    sleep(2),
+    format('Inizio della consegna per la missione ~w con il drone ~w.~n', [MissioneID, Drone]),
+    consegnaA(MissioneID, Drone, X, Y).
+
+consegnaA(MissioneID, Drone, X, Y) :>
+    ciclo_consegnaA(MissioneID, Drone, X, Y).
+
+gestisci_meteo('sunny', Drone) :- decrementa_batteriaA(Drone).
+gestisci_meteo('rainy', Drone) :- decrementa_batteria_nuvolosoA(Drone).
+gestisci_meteo('snowy', Drone) :- decrementa_batteria_nevosoA(Drone).
+
+ciclo_consegnaA(MissioneID, Drone, DestX, DestY) :>
+    batteria_drone(Drone, Batteria),
+    Batteria >= 50,
+    sleep(2),
+    coordinate_drone(Drone, CurX, CurY),
+    alterna_incrementoA(CurX, CurY, DestX, DestY, NuovoX, NuovoY),
+    format('Il drone ~w si è spostato alle coordinate (~w, ~w).~n', [Drone, NuovoX, NuovoY]),
+    chiamata_processo,
+    weather_conditions(Meteo),
+    gestisci_meteo(Meteo, Drone),
+    retractall(coordinate_drone(Drone, _, _)),
+    assert(coordinate_drone(Drone, NuovoX, NuovoY)),
+    salva_stato,
+    (DestX == NuovoX, DestY == NuovoY ->
+        format('Il drone ~w ha raggiunto la destinazione (~w, ~w). Consegna completata.~n', [Drone, DestX, DestY]),
+        consegna_completata(MissioneID, Drone)
+    ;
+        ciclo_consegnaA(MissioneID, Drone, DestX, DestY)
+    ).
+
+ciclo_consegnaA(MissioneID, Drone, DestX, DestY) :>
+    batteria_drone(Drone, Batteria),
+    Batteria < 50,
+    coordinate_drone(Drone, CurX, CurY),
+    sleep(2),
+    format('Missione ID ~w: Il drone ~w ha raggiunto una batteria < 50% alle coordinate (~w, ~w). Richiede ricarica.~n', [MissioneID, Drone, CurX, CurY]),
+    messageA(ricarica, send_message(richiedi_ricarica_batteria(MissioneID, Drone, DestX, DestY), Me)).
+
+alterna_incrementoA(CurX, CurY, DestX, DestY, NuovoX, NuovoY) :>
+    (   CurX == DestX
+    ->  NuovoX = CurX,
+        NuovoY is CurY + 10
+    ;   CurY == DestY
+    ->  NuovoX is CurX + 10,
+        NuovoY = CurY
+    ;   step_ultimo(Step),
+        (   Step mod 2 =:= 0
+        ->  NuovoX is CurX + 10,
+            NuovoY = CurY
+        ;   NuovoX = CurX,
+            NuovoY is CurY + 10
+        )
+    ),
+    aggiorna_stepA.
+
+step_ultimo(Step) :-
+    (   step(Step)
+    ->  true
+    ;   assert(step(0)),
+        Step = 0
+    ).
+
+aggiorna_stepA :>
+    step(Step),
+    NuovoStep is Step + 1,
+    retract(step(Step)),
+    assert(step(NuovoStep)),
+    salva_stato.
+
+consegna_completata(MissioneID,Drone):-
+    format('Notifico il monitoraggio  che la missione ~w è stata completata dal drone ~w.~n', [MissioneID, Drone]),
+    assert(stato_drone(Drone, disponibile)),
+    retract(coordinate_drone(Drone, _, _)),
+    assert(coordinate_drone(Drone, 0, 0)),
+    salva_stato,
+    messageA(monitoraggio, send_message(missione_completata(MissioneID,Drone), Me)).
+
+decrementa_batteriaA(Drone) :>
+    batteria_drone(Drone, Batteria),
+    NuovaBatteria is max(0, Batteria - 5),
+    retract(batteria_drone(Drone, Batteria)),
+    assert(batteria_drone(Drone, NuovaBatteria)),
+    sleep(2),
+    format('La batteria del drone ~w è stata decrementata a ~w%.~n', [Drone, NuovaBatteria]).
+
+decrementa_batteria_nuvolosoA(Drone) :>
+    batteria_drone(Drone, Batteria),
+    NuovaBatteria is max(0, Batteria - 10),
+    retract(batteria_drone(Drone, Batteria)),
+    assert(batteria_drone(Drone, NuovaBatteria)),
+    sleep(2),
+    format('La batteria del drone ~w è stata decrementata a ~w%.~n', [Drone, NuovaBatteria]).
+
+decrementa_batteria_nevosoA(Drone) :>
+    batteria_drone(Drone, Batteria),
+    NuovaBatteria is max(0, Batteria - 12),
+    retract(batteria_drone(Drone, Batteria)),
+    assert(batteria_drone(Drone, NuovaBatteria)),
+    sleep(2),
+    format('La batteria del drone ~w è stata decrementata a ~w%.~n', [Drone, NuovaBatteria]).

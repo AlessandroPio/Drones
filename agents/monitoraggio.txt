@@ -1,0 +1,28 @@
+:- dynamic stato_drone_monitoraggio/2.
+
+stato_drone_monitoraggio(drone1, disponibile).
+stato_drone_monitoraggio(drone2, disponibile).
+
+:- write('Disponibile per monitorare droni!'), nl.
+
+trova_droneE(MissioneID, X, Y) :>
+    stato_drone_monitoraggio(drone1, disponibile) ->
+        sleep(2),
+        format('Il drone1 disponibile per la missione con ID: ~w alle coordinate (~w, ~w).~n', [MissioneID, X, Y]),
+        retract(stato_drone_monitoraggio(drone1, disponibile)),
+        assert(stato_drone_monitoraggio(drone1, occupato)),
+        messageA(drone1, execute_proc(prepara_missione(MissioneID, X, Y), Me))
+    ;   stato_drone_monitoraggio(drone2, disponibile) ->
+            sleep(2),
+            format('Il drone2 disponibile per la missione con ID: ~w alle coordinate (~w, ~w).~n', [MissioneID, X, Y]),
+            retract(stato_drone_monitoraggio(drone2, disponibile)),
+            assert(stato_drone_monitoraggio(drone2, occupato)),
+            messageA(drone2, execute_proc(prepara_missione(MissioneID, X, Y), Me))
+        ;   sleep(2),
+            format('Nessun drone disponibile per la missione con ID: ~w alle coordinate (~w, ~w).~n', [MissioneID, X, Y]),
+            messageA(pianificatore, send_message(nessun_drone_disponibile(MissioneID, X, Y), Me)).
+
+missione_completataE(MissioneID, Drone) :-
+    retract(stato_drone_monitoraggio(Drone, occupato)),
+    assert(stato_drone_monitoraggio(Drone, disponibile)),
+    messageA(pianificatore, send_message(missione_completata(MissioneID), Me)).
